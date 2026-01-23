@@ -1,0 +1,44 @@
+# Archivos y carpetas a ignorar en Git
+
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Configuración sensible
+.env
+.streamlit/secrets.toml
+
+# Logs
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Datos temporales
+*.csv.bak
+temp/
+tmp/
+
+# Parquet temporales
+*.parquet
