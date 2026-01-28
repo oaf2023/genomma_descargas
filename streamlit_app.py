@@ -556,38 +556,33 @@ def pagina_reportes_sql():
         if app_sql.HASHING_DISPONIBLE:
             st.markdown("---")
             with st.expander("🔒 Control de Integridad"):
-                try:
-                    stats_hash = app_sql.obtener_estadisticas_control()
-                    
-                    st.metric("📊 Total Controles", stats_hash['total_registros'])
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("📋 Tablas", stats_hash['tablas_unicas'])
-                    with col2:
-                        st.metric("🌎 Países", stats_hash['paises_unicos'])
-                    
-                    if stats_hash['modificaciones_detectadas'] > 0:
-                        st.warning(f"⚠️ {stats_hash['modificaciones_detectadas']} modificaciones detectadas")
-                    else:
-                        st.success("✅ Sin modificaciones detectadas")
-                    
-                    if stats_hash['ultima_actualizacion']:
-                        st.caption(f"🕐 Última actualización: {stats_hash['ultima_actualizacion'][:19]}")
-                    
-                except Exception as e:
-                    st.caption(f"⚠️ Error al cargar estadísticas de hash: {str(e)}")
+                st.info("💡 Sistema de hashing disponible pero requiere configuración adicional")
+            
+            # Botón para ver historial de hashes
+            if st.button("📜 Ver Historial de Hashes", use_container_width=True, key="sql_ver_historial"):
+                st.session_state['sql_ver_historial_hash'] = True
     
     # ========================================
     # ÁREA PRINCIPAL - Parámetros y Ejecución
     # ========================================
+    
+    # Mostrar historial de hashes si se solicitó
+    if st.session_state.get('sql_ver_historial_hash', False):
+        st.header("📜 Historial de Control de Integridad")
+        st.info("ℹ️ Esta funcionalidad requiere configuración adicional del sistema de hashing")
+        
+        if st.button("🔙 Volver", use_container_width=True, key="sql_volver_historial"):
+            st.session_state['sql_ver_historial_hash'] = False
+            st.rerun()
+        
+        st.stop()  # Detener ejecución aquí sin continuar
     
     # Verificar si se debe ejecutar descarga de tablas
     if st.session_state.get('sql_descargar_tablas', False):
         app_sql.descargar_todas_las_tablas(paises_seleccionados)
         st.session_state['sql_descargar_tablas'] = False
         st.rerun()
-        return
+        st.stop()
     
     # Obtener configuración del reporte seleccionado
     config = app_sql.STORED_PROCEDURES[reporte_seleccionado]
