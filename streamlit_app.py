@@ -759,6 +759,20 @@ def pagina_reportes_sql():
                 )
                 
                 st.info(f"💡 Los archivos se han guardado automáticamente en las carpetas de cada país dentro de `{app_sql.BASE_DIR}`")
+                
+                # Información sobre ubicación según entorno
+                if os.name != 'nt':  # No Windows (Codespaces/Linux)
+                    st.warning("""
+                    ⚠️ **Nota para Codespaces/Entornos en la nube:**
+                    
+                    Los archivos se guardaron en una carpeta temporal local. Para acceder a ellos:
+                    1. **Usa los botones de descarga** arriba de cada país
+                    2. **Descarga el CSV consolidado** con todos los países
+                    3. **Descarga el Excel consolidado** con hojas separadas por país
+                    
+                    💡 En un entorno local Windows con Google Drive Desktop, los archivos se guardarían en:
+                    `G:\\Mi unidad\\ETL_Snowflake\\[PAIS]\\`
+                    """)
             
             st.markdown("---")
             st.subheader("💾 Descarga Consolidada")

@@ -96,14 +96,28 @@ SERVERS_CONFIG = {
 DRIVER = 'ODBC Driver 18 for SQL Server'  # Actualizado a Driver 18 (funciona con TrustServerCertificate)
 
 # Directorio base para resultados
-BASE_DIR = r'C:\Ciencia de Datos\otros_datos'
+# En entornos locales Windows: C:\Ciencia de Datos\otros_datos
+# En Codespaces/Linux: /tmp/genomma_reportes
+if os.name == 'nt':  # Windows
+    BASE_DIR = os.getenv("GENOMMA_BASE_DIR", r'C:\Ciencia de Datos\otros_datos')
+else:  # Linux/Mac (Codespaces)
+    BASE_DIR = os.getenv("GENOMMA_BASE_DIR", '/tmp/genomma_reportes')
 
 # Crear carpetas por país si no existen
 def crear_carpetas_paises():
     """Crea las carpetas para cada país si no existen"""
-    for pais in SERVERS_CONFIG.keys():
-        pais_dir = os.path.join(BASE_DIR, pais)
-        os.makedirs(pais_dir, exist_ok=True)
+    try:
+        for pais in SERVERS_CONFIG.keys():
+            pais_dir = os.path.join(BASE_DIR, pais)
+            os.makedirs(pais_dir, exist_ok=True)
+    except Exception as e:
+        # Si falla, usar directorio temporal
+        import tempfile
+        global BASE_DIR
+        BASE_DIR = tempfile.mkdtemp(prefix='genomma_reportes_')
+        for pais in SERVERS_CONFIG.keys():
+            pais_dir = os.path.join(BASE_DIR, pais)
+            os.makedirs(pais_dir, exist_ok=True)
 
 # Inicializar carpetas al cargar
 crear_carpetas_paises()
