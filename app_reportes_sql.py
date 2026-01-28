@@ -488,12 +488,19 @@ def normalizar_nombre_archivo(nombre: str) -> str:
 def leer_tablas_a_descargar() -> List[str]:
     """Lee el archivo CSV con las tablas a descargar"""
     try:
-        csv_path = os.path.join(BASE_DIR, 'tablas_a_descargar.csv')
-        if os.path.exists(csv_path):
+        # Buscar el CSV en el directorio del script (repositorio)
+        script_dir = Path(__file__).parent
+        csv_path = script_dir / 'tablas_a_descargar.csv'
+        
+        if csv_path.exists():
             df = pd.read_csv(csv_path)
+            if 'nombre_tabla' not in df.columns:
+                st.error(f"❌ El archivo CSV debe tener una columna 'nombre_tabla'")
+                return []
             return df['nombre_tabla'].tolist()
         else:
-            st.error(f"❌ No se encontró el archivo tablas_a_descargar.csv en {BASE_DIR}")
+            st.error(f"❌ No se encontró el archivo tablas_a_descargar.csv en {script_dir}")
+            st.info(f"💡 Busca el archivo en: `{csv_path}`")
             return []
     except Exception as e:
         st.error(f"❌ Error leyendo tablas_a_descargar.csv: {str(e)}")
