@@ -135,6 +135,7 @@ BASE_DIR = detectar_directorio_base()
 # Crear carpetas por país si no existen
 def crear_carpetas_paises():
     """Crea las carpetas para cada país si no existen"""
+    global BASE_DIR
     try:
         # Crear directorio base si no existe
         os.makedirs(BASE_DIR, exist_ok=True)
@@ -147,7 +148,6 @@ def crear_carpetas_paises():
     except Exception as e:
         # Si falla, usar directorio temporal
         import tempfile
-        global BASE_DIR
         BASE_DIR = tempfile.mkdtemp(prefix='genomma_reportes_')
         for pais in SERVERS_CONFIG.keys():
             pais_dir = os.path.join(BASE_DIR, pais)
