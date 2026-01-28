@@ -702,11 +702,35 @@ def descargar_todas_las_tablas(paises: List[str]):
     
     Usa metadatos de diferencias entre países para manejo robusto.
     """
+    # Verificar disponibilidad de pyodbc
+    if not PYODBC_DISPONIBLE:
+        st.error("❌ **pyodbc no está instalado**")
+        st.warning("⚠️ Las funciones de SQL Server no están disponibles en este entorno.")
+        st.info("💡 **Para usar esta funcionalidad:**\n"
+                "- Instala pyodbc: `pip install pyodbc`\n"
+                "- Instala los drivers ODBC de SQL Server\n"
+                "- En Windows: ODBC Driver 18 for SQL Server\n"
+                "- En Linux: unixODBC + msodbcsql18")
+        return
+    
     tablas = leer_tablas_a_descargar()
     
     if not tablas:
         st.warning("⚠️ No hay tablas para descargar")
         return
+    
+    # Mostrar info de inicio
+    st.info(f"🚀 **Iniciando descarga de {len(tablas)} tabla(s) para {len(paises)} país(es)**")
+    
+    # Mostrar directorio de destino
+    if os.name == 'nt':  # Windows
+        if 'Google Drive' in BASE_DIR or 'Mi unidad' in BASE_DIR:
+            st.success(f"📂 **Guardando en Google Drive:** `{BASE_DIR}`")
+        else:
+            st.info(f"📂 **Guardando en:** `{BASE_DIR}`")
+    else:  # Linux/Codespaces
+        st.warning(f"⚠️ **Guardando en directorio temporal:** `{BASE_DIR}`")
+        st.caption("Los archivos se eliminarán al cerrar la sesión. Descárgalos después.")
     
     # Mostrar info de metadatos si está disponible
     if METADATA_DISPONIBLE:
@@ -723,8 +747,28 @@ def descargar_todas_las_tablas(paises: List[str]):
     resumen = []
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
+    # Bandera para mostrar mensaje de conexión solo una vez
+    primera_conexion = True
+    
     for pais in paises:
         st.markdown(f"### 🌎 {pais}")
+        
+        # Mostrar mensaje de conexión en el primer país
+        if primera_conexion:
+            with st.spinner(f"🔌 Conectando a SQL Server ({pais})..."):
+                # Probar conexión
+                test_conn = get_connection(pais)
+                if test_conn is None:
+                    st.error(f"❌ **No se pudo conectar a SQL Server para {pais}**")
+                    st.info("💡 Verifica:\n"
+                           "- Drivers ODBC instalados\n"
+                           "- Conectividad de red\n"
+                           "- Credenciales correctas")
+                    return
+                else:
+                    st.success(f"✅ **Conexión establecida con {pais}**")
+                    test_conn.close()
+                    primera_conexion = False
         
         for tabla in tablas:
             operacion_actual += 1
