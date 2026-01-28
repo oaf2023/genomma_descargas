@@ -42,35 +42,54 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Ocultar menú hamburguesa y elementos superiores */
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    /* Ocultar botones de GitHub, Deploy, etc. */
-    [data-testid="stToolbar"] {display: none;}
-    [data-testid="stDecoration"] {display: none;}
-    [data-testid="stStatusWidget"] {display: none;}
-    
-    /* Ocultar footer inferior con logos de Streamlit y GitHub */
+    /* Ocultar TODOS los elementos del header y toolbar */
+    #MainMenu {visibility: hidden !important;}
+    header {visibility: hidden !important;}
     footer {visibility: hidden !important;}
-    footer:after {
-        content: ''; 
-        visibility: hidden;
-        display: none;
+    
+    /* Ocultar toolbar completo con todos los botones */
+    [data-testid="stToolbar"] {
+        visibility: hidden !important;
+        display: none !important;
     }
     
-    /* Ocultar "Made with Streamlit" y otros enlaces del footer */
+    /* Ocultar decoraciones y badges */
+    [data-testid="stDecoration"] {display: none !important;}
+    [data-testid="stStatusWidget"] {display: none !important;}
+    
+    /* Ocultar "Hosted with Streamlit" y botón de GitHub */
+    [data-testid="stAppViewBlockContainer"] > div:first-child {
+        display: none !important;
+    }
+    
+    /* Ocultar elementos específicos de GitHub */
+    a[href*="github.com"] {display: none !important;}
+    button[kind="header"] {display: none !important;}
+    
+    /* Ocultar TODOS los badges y enlaces del footer */
+    footer {visibility: hidden !important;}
+    footer:after {content: ''; visibility: hidden; display: none;}
     .viewerBadge_container__1QSob {display: none !important;}
     .viewerBadge_link__1S137 {display: none !important;}
     .viewerBadge_text__1JaDK {display: none !important;}
     
-    /* Ocultar elementos en la esquina inferior derecha */
-    [data-testid="stBottom"] {display: none;}
+    /* Ocultar elementos en esquina inferior */
+    [data-testid="stBottom"] {display: none !important;}
     [class*="viewerBadge"] {display: none !important;}
     
-    /* Ocultar enlace "Deploy" y "Manage app" */
-    [data-testid="manage-app-button"] {display: none;}
+    /* Ocultar botones de gestión */
+    [data-testid="manage-app-button"] {display: none !important;}
+    [data-testid="deploy-button"] {display: none !important;}
+    
+    /* Ocultar cualquier iframe o elemento externo */
+    iframe[title*="GitHub"] {display: none !important;}
+    iframe[title*="Streamlit"] {display: none !important;}
+    
+    /* Ocultar elementos con clase st-emotion */
+    [class*="st-emotion"][class*="eqpbllx"] {display: none !important;}
+    
+    /* Ocultar header actions */
+    [data-testid="stHeaderActionElements"] {display: none !important;}
     
     /* Sidebar con diseño mejorado */
     [data-testid="stSidebar"] {

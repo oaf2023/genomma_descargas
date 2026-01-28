@@ -30,9 +30,13 @@ toolbarMode = "minimal"
 showErrorDetails = false
 
 [ui]
-# Ocultar decoración del footer
-hideTopBar = false
+# Ocultar todos los elementos de UI innecesarios
+hideTopBar = true
 hideSidebarNav = false
+
+[runner]
+# Evitar mostrar mensajes de desarrollo
+magicEnabled = false
 
 [theme]
 primaryColor = "#1f77b4"
