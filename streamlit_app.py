@@ -16,6 +16,12 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import importlib.util
+
+# Importar funciones de app_reportes_sql.py
+spec = importlib.util.spec_from_file_location("app_reportes_sql", Path(__file__).parent / "app_reportes_sql.py")
+app_sql = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(app_sql)
 
 # ============================================================================
 # CONFIGURACIÓN INICIAL
@@ -244,7 +250,7 @@ def menu_lateral():
         # Opciones de menú
         opcion = st.radio(
             "Navegación",
-            ["🏠 Inicio", "📊 Explorar Datos", "💻 Query SQL", "🔧 Pipeline ETL", "⚙️ Configuración"],
+            ["🏠 Inicio", "📊 Explorar Datos", "💻 Query SQL", "🔧 Pipeline ETL", "📈 Reportes SQL Server", "⚙️ Configuración"],
             label_visibility="collapsed"
         )
         
@@ -473,6 +479,353 @@ def pagina_configuracion():
         2. **Streamlit Cloud:** Configura los secrets en la configuración del app
         """)
 
+def pagina_reportes_sql():
+    """Página para ejecutar reportes de SQL Server"""
+    st.markdown('<h1 class="main-header">📈 Reportes SQL Server</h1>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    Esta sección permite ejecutar **stored procedures** y descargar **tablas** desde los servidores SQL Server 
+    de los diferentes países (Chile, Colombia, Ecuador, Perú).
+    
+    **Características:**
+    - ✅ Ejecución de 14 stored procedures diferentes
+    - 📥 Descarga de tablas completas (últimos 36 meses)
+    - 🔒 Control de integridad con hashing
+    - 📊 Exportación a CSV y Excel
+    - 🌎 Soporte multi-país
+    """)
+    
+    st.markdown("---")
+    
+    # ========================================
+    # SIDEBAR - Configuración
+    # ========================================
+    with st.sidebar:
+        st.markdown("---")
+        st.header("⚙️ Configuración SQL Server")
+        
+        # Selección de países
+        st.subheader("🌎 Países")
+        paises_seleccionados = st.multiselect(
+            "Seleccionar países:",
+            options=list(app_sql.SERVERS_CONFIG.keys()),
+            default=['CHILE'],
+            help="Selecciona uno o más países para ejecutar los reportes",
+            key="sql_paises"
+        )
+        
+        if not paises_seleccionados:
+            st.warning("⚠️ Debes seleccionar al menos un país")
+            return
+        
+        st.markdown("---")
+        
+        # Selección de reporte
+        st.subheader("📋 Reportes Disponibles")
+        reporte_seleccionado = st.selectbox(
+            "Seleccionar reporte:",
+            options=list(app_sql.STORED_PROCEDURES.keys()),
+            help="Elige el reporte que deseas ejecutar",
+            key="sql_reporte"
+        )
+        
+        st.markdown("---")
+        
+        # Información del reporte
+        st.info(f"**Descripción:**\n\n{app_sql.STORED_PROCEDURES[reporte_seleccionado]['description']}")
+        
+        # Mostrar SP name
+        with st.expander("🔧 Detalles técnicos"):
+            st.code(f"SP: {app_sql.STORED_PROCEDURES[reporte_seleccionado]['sp_name']}")
+            st.write(f"Parámetros: {app_sql.STORED_PROCEDURES[reporte_seleccionado]['params']}")
+        
+        st.markdown("---")
+        
+        # Botón de descarga de tablas
+        st.subheader("📥 Descarga de Tablas")
+        if st.button("⬇️ Descargar Tablas Base", use_container_width=True, help="Descarga las tablas necesarias para los reportes (últimos 36 meses)", key="sql_descargar"):
+            st.session_state['sql_descargar_tablas'] = True
+        
+        # Mostrar info de metadatos si está disponible
+        if app_sql.METADATA_DISPONIBLE:
+            with st.expander("ℹ️ Info de Metadatos"):
+                st.caption(f"📅 Análisis: {app_sql.ESTADISTICAS_ANALISIS['fecha_analisis'][:10]}")
+                st.caption(f"📋 Tablas: {app_sql.ESTADISTICAS_ANALISIS['tablas_analizadas']}")
+        
+        # Mostrar info de hashing si está disponible
+        if app_sql.HASHING_DISPONIBLE:
+            st.markdown("---")
+            with st.expander("🔒 Control de Integridad"):
+                try:
+                    stats_hash = app_sql.obtener_estadisticas_control()
+                    
+                    st.metric("📊 Total Controles", stats_hash['total_registros'])
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("📋 Tablas", stats_hash['tablas_unicas'])
+                    with col2:
+                        st.metric("🌎 Países", stats_hash['paises_unicos'])
+                    
+                    if stats_hash['modificaciones_detectadas'] > 0:
+                        st.warning(f"⚠️ {stats_hash['modificaciones_detectadas']} modificaciones detectadas")
+                    else:
+                        st.success("✅ Sin modificaciones detectadas")
+                    
+                    if stats_hash['ultima_actualizacion']:
+                        st.caption(f"🕐 Última actualización: {stats_hash['ultima_actualizacion'][:19]}")
+                    
+                except Exception as e:
+                    st.caption(f"⚠️ Error al cargar estadísticas de hash: {str(e)}")
+    
+    # ========================================
+    # ÁREA PRINCIPAL - Parámetros y Ejecución
+    # ========================================
+    
+    # Verificar si se debe ejecutar descarga de tablas
+    if st.session_state.get('sql_descargar_tablas', False):
+        app_sql.descargar_todas_las_tablas(paises_seleccionados)
+        st.session_state['sql_descargar_tablas'] = False
+        st.rerun()
+        return
+    
+    # Obtener configuración del reporte seleccionado
+    config = app_sql.STORED_PROCEDURES[reporte_seleccionado]
+    params_names = config['params']
+    
+    # Título del reporte
+    st.header(reporte_seleccionado)
+    st.markdown(f"*{config['description']}*")
+    st.markdown("---")
+    
+    # ========================================
+    # Captura de parámetros
+    # ========================================
+    params_values = []
+    
+    if params_names:
+        st.subheader("📝 Parámetros de Entrada")
+        
+        col1, col2 = st.columns(2)
+        
+        if 'fecha_inicio' in params_names:
+            with col1:
+                fecha_inicio = st.date_input(
+                    "📅 Fecha Inicio",
+                    value=datetime.now().replace(day=1),
+                    help="Fecha de inicio del período",
+                    key="sql_fecha_inicio"
+                )
+                params_values.append(fecha_inicio.strftime('%Y-%m-%d'))
+        
+        if 'fecha_fin' in params_names:
+            with col2:
+                fecha_fin = st.date_input(
+                    "📅 Fecha Fin",
+                    value=datetime.now(),
+                    help="Fecha de fin del período",
+                    key="sql_fecha_fin"
+                )
+                params_values.append(fecha_fin.strftime('%Y-%m-%d'))
+        
+        st.markdown("---")
+    
+    # ========================================
+    # Botón de ejecución
+    # ========================================
+    col_btn1, col_btn2 = st.columns([1, 1])
+    
+    with col_btn1:
+        ejecutar = st.button("▶️ Ejecutar Reporte", type="primary", use_container_width=True, key="sql_ejecutar")
+    
+    with col_btn2:
+        limpiar = st.button("🗑️ Limpiar Resultados", use_container_width=True, key="sql_limpiar")
+    
+    if limpiar:
+        st.rerun()
+    
+    # ========================================
+    # Ejecución y resultados
+    # ========================================
+    
+    if ejecutar:
+        st.markdown("---")
+        st.subheader("📊 Resultados")
+        
+        resultados = {}
+        archivos_guardados = []
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Progress bar
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        total_paises = len(paises_seleccionados)
+        
+        for idx, pais in enumerate(paises_seleccionados):
+            status_text.text(f"Ejecutando en {pais}...")
+            
+            with st.spinner(f"Procesando {pais}..."):
+                # Usar función con fallback si existe función alternativa
+                func_alt = config.get('funcion_alternativa')
+                df = app_sql.ejecutar_con_fallback(
+                    pais, 
+                    config['sp_name'], 
+                    params_values if params_values else None,
+                    func_alt
+                )
+                
+                if df is not None and not df.empty:
+                    resultados[pais] = df
+                    
+                    # Guardar CSV en carpeta del país
+                    try:
+                        ruta_guardada = app_sql.guardar_csv_en_carpeta(
+                            df, 
+                            pais, 
+                            reporte_seleccionado,
+                            timestamp
+                        )
+                        archivos_guardados.append({
+                            'pais': pais,
+                            'ruta': ruta_guardada,
+                            'registros': len(df)
+                        })
+                    except Exception as e:
+                        st.warning(f"⚠️ No se pudo guardar archivo en carpeta {pais}: {e}")
+                    
+                    # Mostrar resultados por país
+                    with st.expander(f"🌎 {pais} - {len(df):,} registros", expanded=True):
+                        # Métricas
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("📊 Registros", f"{len(df):,}")
+                        with col2:
+                            st.metric("📋 Columnas", len(df.columns))
+                        with col3:
+                            st.metric("💾 Tamaño", f"{df.memory_usage(deep=True).sum() / 1024:.1f} KB")
+                        with col4:
+                            st.metric("💾 Guardado", "✅" if any(a['pais'] == pais for a in archivos_guardados) else "❌")
+                        
+                        # Tabla de datos
+                        st.dataframe(
+                            df,
+                            use_container_width=True,
+                            height=400
+                        )
+                        
+                        # Mostrar ruta del archivo guardado
+                        archivo_info = next((a for a in archivos_guardados if a['pais'] == pais), None)
+                        if archivo_info:
+                            st.success(f"📁 Guardado en: `{archivo_info['ruta']}`")
+                        
+                        # Botón de descarga individual
+                        csv = app_sql.exportar_a_csv(df, f"{reporte_seleccionado}_{pais}")
+                        st.download_button(
+                            label=f"📥 Descargar CSV - {pais}",
+                            data=csv,
+                            file_name=f"{reporte_seleccionado.replace(' ', '_')}_{pais}_{timestamp}.csv",
+                            mime="text/csv",
+                            key=f"download_{pais}"
+                        )
+                elif df is not None:
+                    st.warning(f"⚠️ {pais}: No se encontraron datos")
+            
+            # Actualizar progress bar
+            progress_bar.progress((idx + 1) / total_paises)
+        
+        status_text.text("✅ Ejecución completada")
+        
+        # ========================================
+        # Descarga consolidada
+        # ========================================
+        
+        if resultados:
+            st.markdown("---")
+            
+            # Mostrar resumen de archivos guardados
+            if archivos_guardados:
+                st.subheader("📁 Archivos Guardados en Carpetas")
+                
+                df_archivos = pd.DataFrame(archivos_guardados)
+                df_archivos.columns = ['País', 'Ruta Completa', 'Registros']
+                
+                st.dataframe(
+                    df_archivos,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Ruta Completa": st.column_config.TextColumn(
+                            "Ruta Completa",
+                            width="large"
+                        ),
+                        "Registros": st.column_config.NumberColumn(
+                            "Registros",
+                            format="%d"
+                        )
+                    }
+                )
+                
+                st.info(f"💡 Los archivos se han guardado automáticamente en las carpetas de cada país dentro de `{app_sql.BASE_DIR}`")
+            
+            st.markdown("---")
+            st.subheader("💾 Descarga Consolidada")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Excel con múltiples hojas
+                excel_data = app_sql.exportar_a_excel(resultados, f"{reporte_seleccionado}_consolidado")
+                st.download_button(
+                    label="📊 Descargar Excel Consolidado (múltiples hojas)",
+                    data=excel_data,
+                    file_name=f"{reporte_seleccionado.replace(' ', '_')}_consolidado_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="download_excel_consolidado"
+                )
+            
+            with col2:
+                # CSV consolidado con columna de país
+                df_consolidado = pd.concat(
+                    [df.assign(PAIS=pais) for pais, df in resultados.items()],
+                    ignore_index=True
+                )
+                csv_consolidado = app_sql.exportar_a_csv(df_consolidado, f"{reporte_seleccionado}_consolidado")
+                st.download_button(
+                    label="📄 Descargar CSV Consolidado (todos los países)",
+                    data=csv_consolidado,
+                    file_name=f"{reporte_seleccionado.replace(' ', '_')}_consolidado_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    key="download_csv_consolidado"
+                )
+            
+            # Resumen estadístico
+            st.markdown("---")
+            st.subheader("📈 Resumen Estadístico")
+            
+            resumen_data = []
+            for pais, df in resultados.items():
+                resumen_data.append({
+                    'País': pais,
+                    'Registros': len(df),
+                    'Columnas': len(df.columns),
+                    'Tamaño (KB)': df.memory_usage(deep=True).sum() / 1024
+                })
+            
+            df_resumen = pd.DataFrame(resumen_data)
+            st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+            
+            # Totales
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("🌎 Total Países", len(resultados))
+            with col2:
+                st.metric("📊 Total Registros", f"{df_resumen['Registros'].sum():,}")
+            with col3:
+                st.metric("💾 Tamaño Total", f"{df_resumen['Tamaño (KB)'].sum():.1f} KB")
+        else:
+            st.warning("⚠️ No se obtuvieron resultados de ningún país")
+
 # ============================================================================
 # APLICACIÓN PRINCIPAL
 # ============================================================================
@@ -492,6 +845,8 @@ def main():
         pagina_query()
     elif opcion == "🔧 Pipeline ETL":
         pagina_pipeline()
+    elif opcion == "📈 Reportes SQL Server":
+        pagina_reportes_sql()
     elif opcion == "⚙️ Configuración":
         pagina_configuracion()
 

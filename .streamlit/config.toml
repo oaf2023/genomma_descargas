@@ -32,7 +32,6 @@ showErrorDetails = false
 [ui]
 # Ocultar todos los elementos de UI innecesarios
 hideTopBar = true
-hideSidebarNav = false
 
 [runner]
 # Evitar mostrar mensajes de desarrollo

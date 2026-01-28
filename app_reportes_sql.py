@@ -8,13 +8,21 @@ Fecha: 2025-12-10
 
 import streamlit as st
 import pandas as pd
-import pyodbc
 from datetime import datetime, timedelta
 import os
 from typing import Optional, Dict, List
 import io
 import sys
 from pathlib import Path
+
+# Importación condicional de pyodbc (solo si está disponible)
+PYODBC_DISPONIBLE = False
+try:
+    import pyodbc
+    PYODBC_DISPONIBLE = True
+except ImportError:
+    # pyodbc no disponible - las funciones SQL Server mostrarán error apropiado
+    pass
 
 # Agregar directorio hashados al path
 hashados_path = Path(__file__).parent.parent / "hashados"
@@ -45,13 +53,14 @@ except ImportError as e:
     # No mostrar warning aquí, se mostrará en la interfaz si es necesario
     pass
 
-# Configuración de la página
-st.set_page_config(
-    page_title="Reportes SQL Server",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Configuración de la página SOLO si se ejecuta directamente
+if __name__ == "__main__":
+    st.set_page_config(
+        page_title="Reportes SQL Server",
+        page_icon="📊",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
 
 # ============================================================================
 # CONFIGURACIÓN DE SERVIDORES POR PAÍS
@@ -109,6 +118,11 @@ def get_connection(pais: str):
     IMPORTANTE: NO usa cache (@st.cache_resource) según estándar Sección 7 AGENTS.MD
     Cada llamada crea nueva conexión para evitar errores "Connection is busy"
     """
+    if not PYODBC_DISPONIBLE:
+        st.error("❌ pyodbc no está instalado. Las funciones de SQL Server no están disponibles en este entorno.")
+        st.info("💡 Para usar esta funcionalidad, instala pyodbc y los drivers ODBC de SQL Server.")
+        return None
+        
     try:
         config = SERVERS_CONFIG[pais]
         conn_str = (
