@@ -214,7 +214,8 @@ def crear_tabla_snowflake(conn, schema: str, tabla: str, df: pl.DataFrame):
             tipo_sf = mapear_tipo_snowflake(dtype)
             columnas_ddl.append(f"{quote_ident(col_name)} {tipo_sf}")
         
-        ddl = f"CREATE TABLE {full_table} (\n  {',\n  '.join(columnas_ddl)}\n)"
+        columnas_str = ',\n  '.join(columnas_ddl)
+        ddl = f"CREATE TABLE {full_table} (\n  {columnas_str}\n)"
         
         logger.info(f"   Creando tabla nueva: {full_table}")
         cursor.execute(ddl)

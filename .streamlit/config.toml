@@ -1,0 +1,32 @@
+[server]
+# Puerto en el que escucha el servidor
+port = 8501
+
+# Dirección en la que escucha el servidor
+# 0.0.0.0 permite conexiones desde cualquier origen
+address = "0.0.0.0"
+
+# Habilitar CORS para permitir acceso público
+enableCORS = false
+
+# Deshabilitar protección XSRF para acceso público
+enableXsrfProtection = false
+
+# Habilitar WebSocket message compression
+enableWebsocketCompression = false
+
+# Headless mode (sin navegador)
+headless = true
+
+[browser]
+# No abrir navegador automáticamente
+gatherUsageStats = false
+serverAddress = "0.0.0.0"
+serverPort = 8501
+
+[theme]
+primaryColor = "#1f77b4"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#262730"
+font = "sans serif"

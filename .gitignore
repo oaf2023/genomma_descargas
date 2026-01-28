@@ -8,6 +8,7 @@ env/
 # Configuración sensible
 .env
 .streamlit/secrets.toml
+secrets_streamlit_cloud.toml
 
 # Logs
 logs/

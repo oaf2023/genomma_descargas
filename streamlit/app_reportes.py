@@ -1,60 +1,79 @@
 #!/usr/bin/env python3
 """
-App Streamlit para consultar datos de Snowflake
-Dashboard de reportes multi-país
-
-IMPORTANTE: Esta app está diseñada para:
-1. Ejecutarse en Streamlit in Snowflake (recomendado)
-2. Ejecutarse en share.streamlit.io (con .env en Secrets)
-3. Ejecutarse localmente (con .env)
+Genomma Lab - Dashboard Snowflake
+Aplicación Streamlit para consultar y analizar datos de Snowflake
 
 Autor: Sistema
-Fecha: 2026-01-22
+Fecha: 2026-01-27
 """
 
 import streamlit as st
 import pandas as pd
 import snowflake.connector
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 from pathlib import Path
 
-# Intentar cargar .env si existe (local)
+# ============================================================================
+# CONFIGURACIÓN INICIAL
+# ============================================================================
+
+# Cargar variables de entorno
 try:
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).parent.parent / "etl" / ".env")
 except:
     pass
 
-
-# ============================================================================
-# CONFIGURACIÓN
-# ============================================================================
-
-# Título de la app
+# Configuración de la página
 st.set_page_config(
-    page_title="Reportes Snowflake Multi-País",
+    page_title="Genomma Lab - Dashboard Snowflake",
     page_icon="🌎",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ============================================================================
-# CONEXIÓN SNOWFLAKE
+# ESTILOS CSS
+# ============================================================================
+
+st.markdown("""
+<style>
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%);
+    }
+    
+    [data-testid="stSidebar"] * {
+        color: white !important;
+    }
+    
+    .stButton > button {
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1f77b4;
+        text-align: center;
+        padding: 1rem 0;
+        margin-bottom: 2rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================================
+# FUNCIONES DE CONEXIÓN
 # ============================================================================
 
 @st.cache_resource
-def get_snowflake_connection():
-    """
-    Establece conexión con Snowflake
-    
-    Prioridad de configuración:
-    1. st.secrets (Streamlit Cloud)
-    2. Variables de entorno (.env local)
-    """
+def get_connection():
+    """Establece conexión con Snowflake"""
     try:
-        # Intentar desde st.secrets primero (Streamlit Cloud)
-        if "snowflake" in st.secrets:
+        # Intentar desde st.secrets (Streamlit Cloud)
+        if hasattr(st, 'secrets') and "snowflake" in st.secrets:
             config = {
                 "account": st.secrets.snowflake.account,
                 "user": st.secrets.snowflake.user,
@@ -62,312 +81,501 @@ def get_snowflake_connection():
                 "warehouse": st.secrets.snowflake.warehouse,
                 "database": st.secrets.snowflake.database,
                 "schema": st.secrets.snowflake.schema,
-                "role": st.secrets.snowflake.get("role", None)
             }
+            if "role" in st.secrets.snowflake:
+                config["role"] = st.secrets.snowflake.role
         else:
-            # Fallback a variables de entorno (local)
+            # Usar variables de entorno
             config = {
                 "account": os.getenv("SNOWFLAKE_ACCOUNT"),
                 "user": os.getenv("SNOWFLAKE_USER"),
                 "password": os.getenv("SNOWFLAKE_PASSWORD"),
                 "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE"),
-                "database": os.getenv("SNOWFLAKE_DATABASE", "DEV_LND"),
-                "schema": os.getenv("SNOWFLAKE_SCHEMA", "_SQL_CHI"),
-                "role": os.getenv("SNOWFLAKE_ROLE")
+                "database": os.getenv("SNOWFLAKE_DATABASE"),
+                "schema": os.getenv("SNOWFLAKE_SCHEMA"),
             }
+            role = os.getenv("SNOWFLAKE_ROLE")
+            if role:
+                config["role"] = role
         
         # Validar configuración
-        missing = [k for k, v in config.items() if k != "role" and not v]
+        required = ["account", "user", "password", "warehouse", "database", "schema"]
+        missing = [k for k in required if not config.get(k)]
+        
         if missing:
             st.error(f"❌ Faltan configuraciones: {', '.join(missing)}")
-            st.info("💡 Configura las credenciales en .streamlit/secrets.toml o variables de entorno")
-            st.stop()
+            return None
         
-        conn = snowflake.connector.connect(**{k: v for k, v in config.items() if v})
-        
+        # Conectar
+        conn = snowflake.connector.connect(**config)
         return conn
     
     except Exception as e:
-        st.error(f"❌ Error conectando a Snowflake: {e}")
-        st.stop()
+        st.error(f"❌ Error de conexión: {str(e)}")
+        return None
 
 
-def ejecutar_query(query: str, params: dict = None) -> pd.DataFrame:
-    """
-    Ejecuta query en Snowflake y retorna DataFrame de Pandas
-    
-    Args:
-        query: SQL query
-        params: Parámetros para query parametrizada
-    
-    Returns:
-        DataFrame con resultados
-    """
-    conn = get_snowflake_connection()
-    cursor = conn.cursor()
+@st.cache_data(ttl=300)
+def run_query(query: str):
+    """Ejecuta una query y retorna DataFrame"""
+    conn = get_connection()
+    if not conn:
+        return pd.DataFrame()
     
     try:
-        if params:
-            cursor.execute(query, params)
-        else:
-            cursor.execute(query)
-        
-        # Fetch resultados
-        columns = [desc[0] for desc in cursor.description]
-        rows = cursor.fetchall()
-        
-        df = pd.DataFrame(rows, columns=columns)
+        df = pd.read_sql(query, conn)
         return df
-    
-    finally:
-        cursor.close()
+    except Exception as e:
+        st.error(f"❌ Error en query: {str(e)}")
+        return pd.DataFrame()
 
 
-def listar_tablas_por_pais() -> dict:
-    """
-    Lista todas las tablas agrupadas por país
-    
-    Returns:
-        Dict: {pais: [lista_de_tablas]}
-    """
+@st.cache_data(ttl=300)
+def get_tables():
+    """Obtiene lista de tablas disponibles"""
     query = """
-    SELECT TABLE_NAME
+    SELECT TABLE_NAME, TABLE_SCHEMA, ROW_COUNT
     FROM INFORMATION_SCHEMA.TABLES
     WHERE TABLE_SCHEMA = CURRENT_SCHEMA()
       AND TABLE_TYPE = 'BASE TABLE'
-      AND TABLE_NAME NOT LIKE '%_OLD'
     ORDER BY TABLE_NAME
     """
-    
-    df = ejecutar_query(query)
-    
-    # Agrupar por país (asumiendo que las tablas terminan en _PAIS)
-    tablas_por_pais = {
-        "CHILE": [],
-        "COLOMBIA": [],
-        "ECUADOR": [],
-        "PERU": [],
-        "OTROS": []
-    }
-    
-    for tabla in df["TABLE_NAME"].tolist():
-        asignado = False
-        for pais in ["CHILE", "COLOMBIA", "ECUADOR", "PERU"]:
-            if tabla.endswith(f"_{pais}"):
-                tablas_por_pais[pais].append(tabla)
-                asignado = True
-                break
-        
-        if not asignado:
-            tablas_por_pais["OTROS"].append(tabla)
-    
-    # Remover países sin tablas
-    return {k: v for k, v in tablas_por_pais.items() if v}
+    return run_query(query)
 
 
 # ============================================================================
-# UI - SIDEBAR
+# SIDEBAR
 # ============================================================================
 
-st.sidebar.title("🌎 Reportes Multi-País")
-st.sidebar.markdown("---")
-
-# Selector de país
-tablas_por_pais = listar_tablas_por_pais()
-pais_seleccionado = st.sidebar.selectbox(
-    "Selecciona País",
-    options=list(tablas_por_pais.keys()),
-    index=0
-)
-
-# Selector de tabla
-tablas_disponibles = tablas_por_pais.get(pais_seleccionado, [])
-
-if not tablas_disponibles:
-    st.warning(f"⚠️ No hay tablas disponibles para {pais_seleccionado}")
-    st.stop()
-
-tabla_seleccionada = st.sidebar.selectbox(
-    "Selecciona Tabla",
-    options=tablas_disponibles,
-    index=0
-)
-
-st.sidebar.markdown("---")
-
-# Opciones de visualización
-mostrar_info_tabla = st.sidebar.checkbox("📊 Mostrar información de tabla", value=True)
-limite_filas = st.sidebar.number_input(
-    "Límite de filas",
-    min_value=10,
-    max_value=100000,
-    value=1000,
-    step=100
-)
-
-st.sidebar.markdown("---")
-st.sidebar.markdown(f"**Conexión:** {os.getenv('SNOWFLAKE_DATABASE', 'N/A')}")
-st.sidebar.markdown(f"**Schema:** {os.getenv('SNOWFLAKE_SCHEMA', 'N/A')}")
-
-
-# ============================================================================
-# UI - MAIN CONTENT
-# ============================================================================
-
-st.title(f"🌎 {pais_seleccionado} - {tabla_seleccionada}")
-st.markdown("---")
-
-# Información de tabla
-if mostrar_info_tabla:
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        # Contar filas
-        query_count = f'SELECT COUNT(*) AS TOTAL FROM "{tabla_seleccionada}"'
-        df_count = ejecutar_query(query_count)
-        total_filas = df_count["TOTAL"].iloc[0] if not df_count.empty else 0
-        
-        st.metric("📊 Total Filas", f"{total_filas:,}")
-    
-    with col2:
-        # Contar columnas
-        query_cols = f'SELECT COUNT(*) AS TOTAL FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = \'{tabla_seleccionada}\''
-        df_cols = ejecutar_query(query_cols)
-        total_cols = df_cols["TOTAL"].iloc[0] if not df_cols.empty else 0
-        
-        st.metric("📋 Total Columnas", f"{total_cols:,}")
-    
-    with col3:
-        # Última modificación (aproximada)
-        st.metric("🕐 Última Actualización", datetime.now().strftime("%Y-%m-%d"))
-    
+with st.sidebar:
+    st.title("📋 Menú Principal")
     st.markdown("---")
-
-# Tabs para diferentes vistas
-tab1, tab2, tab3 = st.tabs(["📄 Vista de Datos", "📊 Análisis", "🔍 Query SQL"])
-
-with tab1:
-    st.subheader("Vista de Datos")
     
-    # Query principal
-    query_data = f'SELECT * FROM "{tabla_seleccionada}" LIMIT {limite_filas}'
-    
-    with st.spinner(f"Cargando {limite_filas:,} filas..."):
-        df = ejecutar_query(query_data)
-    
-    if df.empty:
-        st.warning("⚠️ La tabla está vacía")
-    else:
-        st.success(f"✅ {len(df):,} filas cargadas")
-        
-        # Filtros básicos (opcional)
-        with st.expander("🔍 Filtros"):
-            columnas_texto = df.select_dtypes(include=['object']).columns.tolist()
-            
-            if columnas_texto:
-                col_filtro = st.selectbox("Columna a filtrar", ["Ninguna"] + columnas_texto)
-                
-                if col_filtro != "Ninguna":
-                    valores_unicos = df[col_filtro].unique().tolist()
-                    valor_filtro = st.multiselect(
-                        f"Valores de {col_filtro}",
-                        options=valores_unicos[:100]  # Limitar a 100 opciones
-                    )
-                    
-                    if valor_filtro:
-                        df = df[df[col_filtro].isin(valor_filtro)]
-                        st.info(f"Filtrado: {len(df):,} filas")
-        
-        # Mostrar datos
-        st.dataframe(
-            df,
-            use_container_width=True,
-            height=600
-        )
-        
-        # Descarga
-        csv = df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button(
-            label="📥 Descargar CSV",
-            data=csv,
-            file_name=f"{tabla_seleccionada}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-
-with tab2:
-    st.subheader("Análisis Exploratorio")
-    
-    if df.empty:
-        st.warning("⚠️ No hay datos para analizar")
-    else:
-        # Resumen estadístico
-        st.markdown("### 📊 Resumen Estadístico")
-        
-        # Columnas numéricas
-        cols_numericas = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-        
-        if cols_numericas:
-            st.dataframe(df[cols_numericas].describe(), use_container_width=True)
-        else:
-            st.info("No hay columnas numéricas para analizar")
-        
-        st.markdown("---")
-        
-        # Top valores por columna
-        st.markdown("### 🔝 Top 10 Valores Frecuentes")
-        
-        col_analisis = st.selectbox(
-            "Selecciona columna para análisis de frecuencia",
-            options=df.columns.tolist()
-        )
-        
-        if col_analisis:
-            top_valores = df[col_analisis].value_counts().head(10)
-            
-            col_chart, col_table = st.columns([2, 1])
-            
-            with col_chart:
-                st.bar_chart(top_valores)
-            
-            with col_table:
-                st.dataframe(
-                    top_valores.reset_index().rename(columns={'index': col_analisis, col_analisis: 'Frecuencia'}),
-                    use_container_width=True
-                )
-
-with tab3:
-    st.subheader("🔍 Ejecutar Query SQL Personalizada")
-    
-    # Editor SQL
-    query_custom = st.text_area(
-        "Escribe tu query SQL",
-        value=f'SELECT * FROM "{tabla_seleccionada}" LIMIT 100',
-        height=150
+    page = st.radio(
+        "Navegación:",
+        ["🏠 Inicio", "📊 Explorar Datos", "🔍 Query SQL", "🔧 Pipeline ETL", "⚙️ Configuración"],
+        label_visibility="collapsed"
     )
     
-    ejecutar = st.button("▶️ Ejecutar Query", type="primary")
+    st.markdown("---")
+    st.markdown("### 🔌 Conexión")
     
-    if ejecutar:
+    conn = get_connection()
+    if conn:
+        st.success("✅ Conectado")
         try:
-            with st.spinner("Ejecutando query..."):
-                df_custom = ejecutar_query(query_custom)
-            
-            st.success(f"✅ Query ejecutada: {len(df_custom):,} filas")
-            
-            st.dataframe(df_custom, use_container_width=True)
-            
-            # Descarga
-            csv_custom = df_custom.to_csv(index=False).encode('utf-8-sig')
-            st.download_button(
-                label="📥 Descargar Resultados",
-                data=csv_custom,
-                file_name=f"query_custom_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv"
-            )
-        
-        except Exception as e:
-            st.error(f"❌ Error ejecutando query: {e}")
+            test_df = pd.read_sql("SELECT CURRENT_DATABASE(), CURRENT_SCHEMA()", conn)
+            st.caption(f"**DB:** {test_df.iloc[0, 0]}")
+            st.caption(f"**Schema:** {test_df.iloc[0, 1]}")
+        except:
+            pass
+    else:
+        st.error("❌ Sin conexión")
+        st.caption("Ve a Configuración")
+    
+    st.markdown("---")
+    st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
+# ============================================================================
+# PÁGINA: INICIO
+# ============================================================================
+
+if page == "🏠 Inicio":
+    st.markdown('<div class="main-title">🌎 Genomma Lab - Dashboard Snowflake</div>', unsafe_allow_html=True)
+    
+    st.markdown("### 👋 Bienvenido")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.info("**📊 Explorar Datos**\n\nVisualiza y analiza tablas de Snowflake")
+    
+    with col2:
+        st.info("**🔍 Query SQL**\n\nEjecuta consultas personalizadas")
+    
+    with col3:
+        st.info("**🔧 Pipeline ETL**\n\nEjecuta proceso de carga de datos")
+    
+    with col4:
+        st.info("**⚙️ Configuración**\n\nGestiona credenciales y conexión")
+    
+    if conn:
+        st.markdown("---")
+        st.markdown("### 📋 Tablas Disponibles")
+        
+        tables_df = get_tables()
+        
+        if not tables_df.empty:
+            st.metric("Total de tablas", len(tables_df))
+            
+            with st.expander("Ver lista completa"):
+                st.dataframe(tables_df, use_container_width=True, hide_index=True)
+        else:
+            st.warning("No se encontraron tablas")
+    else:
+        st.warning("⚠️ Configura la conexión para ver las tablas disponibles")
+
+# ============================================================================
+# PÁGINA: EXPLORAR DATOS
+# ============================================================================
+
+elif page == "📊 Explorar Datos":
+    st.markdown('<div class="main-title">📊 Explorar Datos</div>', unsafe_allow_html=True)
+    
+    if not conn:
+        st.error("❌ No hay conexión a Snowflake")
+        st.info("👉 Ve a **Configuración** para configurar las credenciales")
+        st.stop()
+    
+    # Obtener tablas
+    tables_df = get_tables()
+    
+    if tables_df.empty:
+        st.warning("⚠️ No hay tablas disponibles")
+        st.stop()
+    
+    # Selector de tabla
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        selected_table = st.selectbox(
+            "Selecciona una tabla:",
+            options=tables_df['TABLE_NAME'].tolist()
+        )
+    
+    with col2:
+        limit = st.number_input(
+            "Límite de filas:",
+            min_value=10,
+            max_value=10000,
+            value=1000,
+            step=100
+        )
+    
+    if st.button("📥 Cargar Datos", type="primary"):
+        with st.spinner("Cargando datos..."):
+            query = f'SELECT * FROM "{selected_table}" LIMIT {limit}'
+            df = run_query(query)
+        
+        if not df.empty:
+            st.success(f"✅ {len(df)} filas cargadas")
+            
+            # Información de la tabla
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Filas", len(df))
+            col2.metric("Columnas", len(df.columns))
+            col3.metric("Última carga", datetime.now().strftime("%H:%M:%S"))
+            
+            # Tabs
+            tab1, tab2, tab3 = st.tabs(["📄 Datos", "📊 Estadísticas", "🔍 Filtros"])
+            
+            with tab1:
+                st.dataframe(df, use_container_width=True, height=500)
+                
+                csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    "📥 Descargar CSV",
+                    csv,
+                    f"{selected_table}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    "text/csv"
+                )
+            
+            with tab2:
+                cols_num = df.select_dtypes(include=['int64', 'float64']).columns
+                if len(cols_num) > 0:
+                    st.dataframe(df[cols_num].describe(), use_container_width=True)
+                else:
+                    st.info("No hay columnas numéricas")
+            
+            with tab3:
+                if len(df.columns) > 0:
+                    col_filter = st.selectbox("Columna:", df.columns)
+                    unique_vals = df[col_filter].unique()[:100]
+                    
+                    values = st.multiselect("Valores:", unique_vals)
+                    if values:
+                        filtered = df[df[col_filter].isin(values)]
+                        st.dataframe(filtered, use_container_width=True)
+        else:
+            st.warning("La tabla está vacía")
+
+# ============================================================================
+# PÁGINA: QUERY SQL
+# ============================================================================
+
+elif page == "🔍 Query SQL":
+    st.markdown('<div class="main-title">🔍 Query SQL Personalizada</div>', unsafe_allow_html=True)
+    
+    if not conn:
+        st.error("❌ No hay conexión a Snowflake")
+        st.info("👉 Ve a **Configuración** para configurar las credenciales")
+        st.stop()
+    
+    query = st.text_area(
+        "Escribe tu consulta SQL:",
+        value="SELECT * FROM INFORMATION_SCHEMA.TABLES LIMIT 10",
+        height=200
+    )
+    
+    col1, col2 = st.columns([1, 4])
+    
+    with col1:
+        if st.button("▶️ Ejecutar", type="primary"):
+            with st.spinner("Ejecutando..."):
+                df = run_query(query)
+            
+            if not df.empty:
+                st.success(f"✅ {len(df)} filas × {len(df.columns)} columnas")
+                st.dataframe(df, use_container_width=True, height=500)
+                
+                csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    "📥 Descargar Resultados",
+                    csv,
+                    f"query_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    "text/csv"
+                )
+            else:
+                st.warning("Sin resultados")
+
+# ============================================================================
+# PÁGINA: PIPELINE ETL
+# ============================================================================
+
+elif page == "🔧 Pipeline ETL":
+    st.markdown('<div class="main-title">🔧 Pipeline ETL - Proceso de Carga</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    ### 📋 Pipeline de Extracción, Transformación y Carga
+    
+    Ejecuta los scripts del proceso ETL en orden:
+    1. **Descargar** datos de SQL Server
+    2. **Normalizar** headers de archivos CSV
+    3. **Renombrar** archivos según estándar
+    4. **Cargar** datos a Snowflake
+    """)
+    
+    st.markdown("---")
+    
+    # Definir scripts
+    scripts = [
+        {
+            "num": 1,
+            "name": "Descargar SQL Server",
+            "file": "1_descargar_sql_server.py",
+            "desc": "Descarga datos desde SQL Server a archivos CSV",
+            "icon": "⬇️"
+        },
+        {
+            "num": 2,
+            "name": "Normalizar Headers",
+            "file": "2_normalizar_headers.py",
+            "desc": "Normaliza los nombres de columnas en archivos CSV",
+            "icon": "🔤"
+        },
+        {
+            "num": 3,
+            "name": "Renombrar Archivos",
+            "file": "3_renombrar_archivos.py",
+            "desc": "Renombra archivos según convención estándar",
+            "icon": "📝"
+        },
+        {
+            "num": 4,
+            "name": "Cargar a Snowflake",
+            "file": "4_cargar_snowflake.py",
+            "desc": "Carga los datos procesados a Snowflake",
+            "icon": "⬆️"
+        }
+    ]
+    
+    # Tabs para diferentes opciones
+    tab1, tab2 = st.tabs(["🚀 Ejecutar Scripts", "📊 Estado"])
+    
+    with tab1:
+        st.markdown("### Selecciona qué ejecutar")
+        
+        # Opción de ejecutar todo
+        if st.button("▶️ Ejecutar Pipeline Completo", type="primary", use_container_width=True):
+            progress_bar = st.progress(0)
+            status_placeholder = st.empty()
+            
+            import subprocess
+            
+            for i, script in enumerate(scripts):
+                status_placeholder.info(f"🔄 Ejecutando: {script['icon']} {script['name']}")
+                progress_bar.progress((i) / len(scripts))
+                
+                script_path = Path(__file__).parent.parent / "etl" / script["file"]
+                
+                try:
+                    result = subprocess.run(
+                        ["python3", str(script_path)],
+                        capture_output=True,
+                        text=True,
+                        timeout=300
+                    )
+                    
+                    if result.returncode == 0:
+                        status_placeholder.success(f"✅ {script['name']} completado")
+                        with st.expander(f"Ver salida de {script['name']}"):
+                            st.code(result.stdout if result.stdout else "Sin salida")
+                    else:
+                        status_placeholder.error(f"❌ Error en {script['name']}")
+                        st.error(result.stderr if result.stderr else "Error desconocido")
+                        break
+                        
+                except subprocess.TimeoutExpired:
+                    status_placeholder.error(f"❌ {script['name']} - Tiempo de ejecución excedido")
+                    break
+                except Exception as e:
+                    status_placeholder.error(f"❌ {script['name']} - Error: {str(e)}")
+                    break
+                
+                progress_bar.progress((i + 1) / len(scripts))
+            else:
+                status_placeholder.success("🎉 Pipeline completado exitosamente")
+                progress_bar.progress(1.0)
+        
+        st.markdown("---")
+        st.markdown("### Ejecutar scripts individualmente")
+        
+        # Mostrar cada script
+        for script in scripts:
+            with st.expander(f"{script['icon']} {script['num']}. {script['name']}"):
+                st.markdown(f"**Descripción:** {script['desc']}")
+                st.markdown(f"**Archivo:** `{script['file']}`")
+                
+                col1, col2 = st.columns([3, 1])
+                
+                with col2:
+                    if st.button(f"▶️ Ejecutar", key=f"run_{script['num']}"):
+                        script_path = Path(__file__).parent.parent / "etl" / script["file"]
+                        
+                        with st.spinner(f"Ejecutando {script['name']}..."):
+                            import subprocess
+                            
+                            try:
+                                result = subprocess.run(
+                                    ["python3", str(script_path)],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=300
+                                )
+                                
+                                if result.returncode == 0:
+                                    st.success(f"✅ {script['name']} completado")
+                                    if result.stdout:
+                                        st.code(result.stdout, language="text")
+                                else:
+                                    st.error(f"❌ Error en {script['name']}")
+                                    if result.stderr:
+                                        st.code(result.stderr, language="text")
+                            
+                            except subprocess.TimeoutExpired:
+                                st.error(f"❌ Tiempo de ejecución excedido (5 min)")
+                            except Exception as e:
+                                st.error(f"❌ Error: {str(e)}")
+    
+    with tab2:
+        st.markdown("### 📊 Estado de Scripts")
+        
+        # Verificar existencia de scripts
+        etl_dir = Path(__file__).parent.parent / "etl"
+        
+        for script in scripts:
+            script_path = etl_dir / script["file"]
+            
+            col1, col2, col3 = st.columns([3, 1, 1])
+            
+            with col1:
+                st.markdown(f"**{script['icon']} {script['name']}**")
+            
+            with col2:
+                if script_path.exists():
+                    st.success("✅ Existe")
+                else:
+                    st.error("❌ No encontrado")
+            
+            with col3:
+                if script_path.exists():
+                    size_kb = script_path.stat().st_size / 1024
+                    st.caption(f"{size_kb:.1f} KB")
+
+# ============================================================================
+# PÁGINA: CONFIGURACIÓN
+# ============================================================================
+
+elif page == "⚙️ Configuración":
+    st.markdown('<div class="main-title">⚙️ Configuración</div>', unsafe_allow_html=True)
+    
+    st.markdown("### 📋 Estado de Conexión")
+    
+    if conn:
+        st.success("✅ Conexión establecida")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric("Account", os.getenv("SNOWFLAKE_ACCOUNT", "N/A"))
+            st.metric("User", os.getenv("SNOWFLAKE_USER", "N/A"))
+            st.metric("Warehouse", os.getenv("SNOWFLAKE_WAREHOUSE", "N/A"))
+        
+        with col2:
+            st.metric("Database", os.getenv("SNOWFLAKE_DATABASE", "N/A"))
+            st.metric("Schema", os.getenv("SNOWFLAKE_SCHEMA", "N/A"))
+            st.metric("Role", os.getenv("SNOWFLAKE_ROLE", "N/A"))
+        
+        if st.button("🔄 Probar Conexión"):
+            try:
+                test_df = pd.read_sql(
+                    "SELECT CURRENT_USER(), CURRENT_DATABASE(), CURRENT_SCHEMA()",
+                    conn
+                )
+                st.success("✅ Conexión funcionando")
+                st.json({
+                    "Usuario": test_df.iloc[0, 0],
+                    "Database": test_df.iloc[0, 1],
+                    "Schema": test_df.iloc[0, 2]
+                })
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+    else:
+        st.error("❌ Sin conexión a Snowflake")
+        
+        st.markdown(f"""
+        ### 📝 Configuración Requerida
+        
+        Edita el archivo: **`etl/.env`**
+        
+        ```bash
+        SNOWFLAKE_ACCOUNT=tu_account
+        SNOWFLAKE_USER=tu_usuario
+        SNOWFLAKE_PASSWORD=tu_password
+        SNOWFLAKE_WAREHOUSE=COMPUTE_WH
+        SNOWFLAKE_DATABASE=DEV_LND
+        SNOWFLAKE_SCHEMA=_SQL_CHI
+        SNOWFLAKE_ROLE=tu_role
+        ```
+        
+        O para Streamlit Cloud, usa **Settings → Secrets**
+        """)
+        
+        with st.expander("🔍 Diagnóstico"):
+            config = {
+                "SNOWFLAKE_ACCOUNT": os.getenv("SNOWFLAKE_ACCOUNT", "❌ NO CONFIG"),
+                "SNOWFLAKE_USER": os.getenv("SNOWFLAKE_USER", "❌ NO CONFIG"),
+                "SNOWFLAKE_PASSWORD": "✅ OK" if os.getenv("SNOWFLAKE_PASSWORD") else "❌ NO CONFIG",
+                "SNOWFLAKE_WAREHOUSE": os.getenv("SNOWFLAKE_WAREHOUSE", "❌ NO CONFIG"),
+                "SNOWFLAKE_DATABASE": os.getenv("SNOWFLAKE_DATABASE", "❌ NO CONFIG"),
+                "SNOWFLAKE_SCHEMA": os.getenv("SNOWFLAKE_SCHEMA", "❌ NO CONFIG"),
+            }
+            
+            for key, val in config.items():
+                if "NO CONFIG" in val:
+                    st.error(f"{key}: {val}")
+                else:
+                    st.success(f"{key}: {val}")
 
 # ============================================================================
 # FOOTER
@@ -377,7 +585,7 @@ st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: gray; font-size: 12px;'>
-    🚀 App Streamlit - Reportes Snowflake Multi-País | Actualizado: 2026-01-22
+    🚀 Genomma Lab Dashboard | Última actualización: 2026-01-27
     </div>
     """,
     unsafe_allow_html=True
