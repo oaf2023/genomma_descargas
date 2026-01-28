@@ -903,11 +903,48 @@ def descargar_todas_las_tablas(paises: List[str]):
     with col2:
         st.metric("📋 Tablas", len(tablas))
     with col3:
-        exitosos = len(df_resumen[df_resumen['Estado'] == '✅ OK'])
+        exitosos = len(df_resumen[df_resumen['Estado'].str.contains('✅', na=False)])
         st.metric("✅ Exitosos", f"{exitosos}/{len(resumen)}")
     with col4:
         total_registros = df_resumen['Registros'].sum()
         st.metric("📊 Total Registros", f"{total_registros:,}")
+    
+    # ========================================
+    # BOTONES DE DESCARGA (para Codespaces)
+    # ========================================
+    en_codespaces = os.getenv('CODESPACES') == 'true' or '/workspaces/' in os.getcwd()
+    
+    if en_codespaces:
+        st.markdown("---")
+        st.info("💾 **Archivos listos en el servidor temporal**. Descárgalos a tu PC usando los botones abajo:")
+        
+        # Crear archivo ZIP con todos los CSVs
+        import zipfile
+        import io
+        
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for pais in paises:
+                pais_dir = os.path.join(BASE_DIR, pais)
+                if os.path.exists(pais_dir):
+                    for archivo in os.listdir(pais_dir):
+                        if archivo.endswith(f'_{timestamp}.csv'):
+                            ruta_archivo = os.path.join(pais_dir, archivo)
+                            zip_file.write(ruta_archivo, f"{pais}/{archivo}")
+        
+        zip_buffer.seek(0)
+        
+        st.download_button(
+            label="📦 Descargar TODOS los archivos (ZIP)",
+            data=zip_buffer,
+            file_name=f"genomma_tablas_{timestamp}.zip",
+            mime="application/zip",
+            use_container_width=True
+        )
+        
+        st.caption(f"📁 Archivos temporales en: `{BASE_DIR}` (se borrarán al cerrar Codespaces)")
+    else:
+        st.success(f"✅ **Archivos guardados en:** `{BASE_DIR}`")
 
 
 # ============================================================================

@@ -502,22 +502,43 @@ def pagina_reportes_sql():
     # ========================================
     
     # Mostrar información del entorno y ubicación de archivos
-    entorno_info = "🪟 **Windows**" if os.name == 'nt' else "🐧 **Linux/Codespaces**"
+    entorno_servidor = "🪟 **Windows**" if os.name == 'nt' else "🐧 **Linux/Codespaces**"
     google_drive_detectado = os.name == 'nt' and os.path.exists(r'G:\Mi unidad\ETL_Snowflake')
     
-    with st.expander("ℹ️ Información del Entorno", expanded=False):
-        col_env1, col_env2 = st.columns(2)
-        with col_env1:
-            st.markdown(f"**Sistema Operativo:** {entorno_info}")
-            st.markdown(f"**Directorio de Trabajo:** `{app_sql.BASE_DIR}`")
-        with col_env2:
-            if os.name == 'nt':
-                if google_drive_detectado:
-                    st.success("✅ Google Drive Desktop detectado")
-                else:
-                    st.info("💡 Google Drive no detectado - usando carpeta local")
-            else:
-                st.info("💡 Codespaces - archivos temporales (usar botones de descarga)")
+    # Detectar si estamos en Codespaces
+    en_codespaces = os.getenv('CODESPACES') == 'true' or '/workspaces/' in os.getcwd()
+    
+    with st.expander("ℹ️ Información del Entorno y Descarga de Archivos", expanded=en_codespaces):
+        if en_codespaces:
+            st.warning("⚠️ **Estás usando GitHub Codespaces (servidor remoto en Linux)**")
+            st.markdown("""
+            **¿Cómo funcionan las descargas?**
+            
+            1. 📡 **El servidor (Codespaces)** descarga desde SQL Server → archivos temporales en `/tmp`
+            2. 💾 **Tú debes descargar** los archivos desde Codespaces a tu PC Windows
+            3. 📂 **Luego puedes copiar** manualmente a Google Drive si lo deseas
+            
+            **Pasos recomendados:**
+            - ✅ Haz clic en "Descargar Tablas Base" o "Ejecutar Reporte"
+            - ✅ Espera a que termine el proceso
+            - ✅ Usa los botones de descarga que aparecen al final
+            - ✅ Guarda los archivos en tu PC Windows
+            
+            **Nota:** Los archivos en `/tmp/genomma_reportes` son temporales y se borrarán al cerrar Codespaces.
+            """)
+        else:
+            col_env1, col_env2 = st.columns(2)
+            with col_env1:
+                st.markdown(f"**Sistema Operativo:** {entorno_servidor}")
+                st.markdown(f"**Directorio de Trabajo:** `{app_sql.BASE_DIR}`")
+            with col_env2:
+                if os.name == 'nt':
+                    if google_drive_detectado:
+                        st.success("✅ Google Drive Desktop detectado")
+                        st.info("📂 Los archivos se guardarán automáticamente en Google Drive")
+                    else:
+                        st.info("💡 Google Drive no detectado - usando carpeta local")
+                        st.caption(f"Los archivos se guardan en: `{app_sql.BASE_DIR}`")
     
     st.header("⚙️ Configuración")
     
