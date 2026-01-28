@@ -498,12 +498,13 @@ def pagina_reportes_sql():
     st.markdown("---")
     
     # ========================================
-    # SIDEBAR - Configuración
+    # CONFIGURACIÓN - En área principal
     # ========================================
-    with st.sidebar:
-        st.markdown("---")
-        st.header("⚙️ Configuración SQL Server")
-        
+    st.header("⚙️ Configuración")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
         # Selección de países
         st.subheader("🌎 Países")
         paises_seleccionados = st.multiselect(
@@ -517,9 +518,8 @@ def pagina_reportes_sql():
         if not paises_seleccionados:
             st.warning("⚠️ Debes seleccionar al menos un país")
             return
-        
-        st.markdown("---")
-        
+    
+    with col2:
         # Selección de reporte
         st.subheader("📋 Reportes Disponibles")
         reporte_seleccionado = st.selectbox(
@@ -528,39 +528,36 @@ def pagina_reportes_sql():
             help="Elige el reporte que deseas ejecutar",
             key="sql_reporte"
         )
-        
-        st.markdown("---")
-        
-        # Información del reporte
+    
+    st.markdown("---")
+    
+    # Información del reporte
+    with st.expander("📝 Información del Reporte", expanded=True):
         st.info(f"**Descripción:**\n\n{app_sql.STORED_PROCEDURES[reporte_seleccionado]['description']}")
         
-        # Mostrar SP name
-        with st.expander("🔧 Detalles técnicos"):
-            st.code(f"SP: {app_sql.STORED_PROCEDURES[reporte_seleccionado]['sp_name']}")
-            st.write(f"Parámetros: {app_sql.STORED_PROCEDURES[reporte_seleccionado]['params']}")
-        
-        st.markdown("---")
-        
-        # Botón de descarga de tablas
-        st.subheader("📥 Descarga de Tablas")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.code(f"SP: {app_sql.STORED_PROCEDURES[reporte_seleccionado]['sp_name']}", language="text")
+        with col_b:
+            st.write(f"**Parámetros:** {', '.join(app_sql.STORED_PROCEDURES[reporte_seleccionado]['params']) if app_sql.STORED_PROCEDURES[reporte_seleccionado]['params'] else 'Ninguno'}")
+    
+    # Botones de acciones especiales
+    col_btn_a, col_btn_b, col_btn_c = st.columns(3)
+    
+    with col_btn_a:
         if st.button("⬇️ Descargar Tablas Base", use_container_width=True, help="Descarga las tablas necesarias para los reportes (últimos 36 meses)", key="sql_descargar"):
             st.session_state['sql_descargar_tablas'] = True
-        
-        # Mostrar info de metadatos si está disponible
-        if app_sql.METADATA_DISPONIBLE:
-            with st.expander("ℹ️ Info de Metadatos"):
-                st.caption(f"📅 Análisis: {app_sql.ESTADISTICAS_ANALISIS['fecha_analisis'][:10]}")
-                st.caption(f"📋 Tablas: {app_sql.ESTADISTICAS_ANALISIS['tablas_analizadas']}")
-        
-        # Mostrar info de hashing si está disponible
+    
+    with col_btn_b:
         if app_sql.HASHING_DISPONIBLE:
-            st.markdown("---")
-            with st.expander("🔒 Control de Integridad"):
-                st.info("💡 Sistema de hashing disponible pero requiere configuración adicional")
-            
-            # Botón para ver historial de hashes
             if st.button("📜 Ver Historial de Hashes", use_container_width=True, key="sql_ver_historial"):
                 st.session_state['sql_ver_historial_hash'] = True
+    
+    with col_btn_c:
+        if app_sql.METADATA_DISPONIBLE:
+            st.info(f"📅 Metadatos: {app_sql.ESTADISTICAS_ANALISIS.get('tablas_analizadas', 0)} tablas")
+    
+    st.markdown("---")
     
     # ========================================
     # ÁREA PRINCIPAL - Parámetros y Ejecución
