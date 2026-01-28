@@ -500,6 +500,25 @@ def pagina_reportes_sql():
     # ========================================
     # CONFIGURACIÓN - En área principal
     # ========================================
+    
+    # Mostrar información del entorno y ubicación de archivos
+    entorno_info = "🪟 **Windows**" if os.name == 'nt' else "🐧 **Linux/Codespaces**"
+    google_drive_detectado = os.name == 'nt' and os.path.exists(r'G:\Mi unidad\ETL_Snowflake')
+    
+    with st.expander("ℹ️ Información del Entorno", expanded=False):
+        col_env1, col_env2 = st.columns(2)
+        with col_env1:
+            st.markdown(f"**Sistema Operativo:** {entorno_info}")
+            st.markdown(f"**Directorio de Trabajo:** `{app_sql.BASE_DIR}`")
+        with col_env2:
+            if os.name == 'nt':
+                if google_drive_detectado:
+                    st.success("✅ Google Drive Desktop detectado")
+                else:
+                    st.info("💡 Google Drive no detectado - usando carpeta local")
+            else:
+                st.info("💡 Codespaces - archivos temporales (usar botones de descarga)")
+    
     st.header("⚙️ Configuración")
     
     col1, col2 = st.columns(2)
@@ -758,21 +777,37 @@ def pagina_reportes_sql():
                     }
                 )
                 
-                st.info(f"💡 Los archivos se han guardado automáticamente en las carpetas de cada país dentro de `{app_sql.BASE_DIR}`")
+                st.info(f"💡 Los archivos se han guardado automáticamente en: `{app_sql.BASE_DIR}`")
                 
                 # Información sobre ubicación según entorno
                 if os.name != 'nt':  # No Windows (Codespaces/Linux)
                     st.warning("""
-                    ⚠️ **Nota para Codespaces/Entornos en la nube:**
+                    ⚠️ **Entorno Linux/Codespaces detectado**
                     
-                    Los archivos se guardaron en una carpeta temporal local. Para acceder a ellos:
-                    1. **Usa los botones de descarga** arriba de cada país
-                    2. **Descarga el CSV consolidado** con todos los países
+                    Los archivos se guardaron en una carpeta temporal local. Para conservarlos:
+                    
+                    1. **Usa los botones de descarga** individuales arriba de cada país
+                    2. **Descarga el CSV consolidado** con todos los países juntos
                     3. **Descarga el Excel consolidado** con hojas separadas por país
                     
-                    💡 En un entorno local Windows con Google Drive Desktop, los archivos se guardarían en:
-                    `G:\\Mi unidad\\ETL_Snowflake\\[PAIS]\\`
+                    ⚡ Los archivos temporales se perderán al cerrar esta sesión de Codespaces.
                     """)
+                else:  # Windows
+                    if os.path.exists(r'G:\Mi unidad\ETL_Snowflake'):
+                        st.success("""
+                        ✅ **Google Drive Desktop detectado**
+                        
+                        Los archivos están sincronizándose automáticamente con Google Drive.
+                        También puedes descargarlos usando los botones de arriba.
+                        """)
+                    else:
+                        st.info("""
+                        💡 **Guardado local en Windows**
+                        
+                        Los archivos están guardados localmente. Considera:
+                        - Instalar Google Drive Desktop para sincronización automática
+                        - Usar los botones de descarga para copias de seguridad
+                        """)
             
             st.markdown("---")
             st.subheader("💾 Descarga Consolidada")

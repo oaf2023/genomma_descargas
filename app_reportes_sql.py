@@ -95,21 +95,55 @@ SERVERS_CONFIG = {
 
 DRIVER = 'ODBC Driver 18 for SQL Server'  # Actualizado a Driver 18 (funciona con TrustServerCertificate)
 
+# ============================================================================
+# CONFIGURACIÓN DE DIRECTORIOS - MULTIPLATAFORMA
+# ============================================================================
+
+def detectar_directorio_base():
+    """
+    Detecta y configura el directorio base según el sistema operativo
+    
+    WINDOWS:
+    - Prioridad 1: Variable de entorno GENOMMA_BASE_DIR
+    - Prioridad 2: Google Drive Desktop (G:\Mi unidad\ETL_Snowflake)
+    - Prioridad 3: Carpeta local (C:\Ciencia de Datos\otros_datos)
+    
+    LINUX/CODESPACES:
+    - Prioridad 1: Variable de entorno GENOMMA_BASE_DIR
+    - Prioridad 2: Carpeta temporal (/tmp/genomma_reportes)
+    """
+    # Variable de entorno tiene máxima prioridad
+    env_dir = os.getenv("GENOMMA_BASE_DIR")
+    if env_dir and os.path.exists(os.path.dirname(env_dir)):
+        return env_dir
+    
+    if os.name == 'nt':  # Windows
+        # Intentar Google Drive Desktop primero
+        google_drive = r'G:\Mi unidad\ETL_Snowflake'
+        if os.path.exists(google_drive):
+            return google_drive
+        
+        # Fallback a carpeta local Windows
+        local_win = r'C:\Ciencia de Datos\otros_datos'
+        return local_win
+    else:  # Linux/Mac (Codespaces)
+        return '/tmp/genomma_reportes'
+
 # Directorio base para resultados
-# En entornos locales Windows: C:\Ciencia de Datos\otros_datos
-# En Codespaces/Linux: /tmp/genomma_reportes
-if os.name == 'nt':  # Windows
-    BASE_DIR = os.getenv("GENOMMA_BASE_DIR", r'C:\Ciencia de Datos\otros_datos')
-else:  # Linux/Mac (Codespaces)
-    BASE_DIR = os.getenv("GENOMMA_BASE_DIR", '/tmp/genomma_reportes')
+BASE_DIR = detectar_directorio_base()
 
 # Crear carpetas por país si no existen
 def crear_carpetas_paises():
     """Crea las carpetas para cada país si no existen"""
     try:
+        # Crear directorio base si no existe
+        os.makedirs(BASE_DIR, exist_ok=True)
+        
+        # Crear subdirectorios por país
         for pais in SERVERS_CONFIG.keys():
             pais_dir = os.path.join(BASE_DIR, pais)
             os.makedirs(pais_dir, exist_ok=True)
+            
     except Exception as e:
         # Si falla, usar directorio temporal
         import tempfile
