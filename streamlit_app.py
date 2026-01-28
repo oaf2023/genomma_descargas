@@ -42,6 +42,17 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* Ocultar menú hamburguesa y elementos superiores */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Ocultar botones de GitHub, Deploy, etc. */
+    [data-testid="stToolbar"] {display: none;}
+    [data-testid="stDecoration"] {display: none;}
+    [data-testid="stStatusWidget"] {display: none;}
+    
+    /* Sidebar con diseño mejorado */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%);
     }
@@ -50,6 +61,7 @@ st.markdown("""
         color: white !important;
     }
     
+    /* Botones con gradiente */
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -65,6 +77,7 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
     
+    /* Header principal */
     .main-header {
         font-size: 2.5rem;
         font-weight: 800;
@@ -74,6 +87,7 @@ st.markdown("""
         margin-bottom: 2rem;
     }
     
+    /* Cards de métricas */
     .metric-card {
         background: white;
         padding: 1.5rem;

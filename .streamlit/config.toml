@@ -24,6 +24,16 @@ gatherUsageStats = false
 serverAddress = "0.0.0.0"
 serverPort = 8501
 
+[client]
+# Ocultar menú hamburguesa y elementos de la barra superior
+toolbarMode = "minimal"
+showErrorDetails = false
+
+[ui]
+# Ocultar decoración del footer
+hideTopBar = false
+hideSidebarNav = false
+
 [theme]
 primaryColor = "#1f77b4"
 backgroundColor = "#FFFFFF"
