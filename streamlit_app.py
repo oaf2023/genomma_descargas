@@ -52,6 +52,26 @@ st.markdown("""
     [data-testid="stDecoration"] {display: none;}
     [data-testid="stStatusWidget"] {display: none;}
     
+    /* Ocultar footer inferior con logos de Streamlit y GitHub */
+    footer {visibility: hidden !important;}
+    footer:after {
+        content: ''; 
+        visibility: hidden;
+        display: none;
+    }
+    
+    /* Ocultar "Made with Streamlit" y otros enlaces del footer */
+    .viewerBadge_container__1QSob {display: none !important;}
+    .viewerBadge_link__1S137 {display: none !important;}
+    .viewerBadge_text__1JaDK {display: none !important;}
+    
+    /* Ocultar elementos en la esquina inferior derecha */
+    [data-testid="stBottom"] {display: none;}
+    [class*="viewerBadge"] {display: none !important;}
+    
+    /* Ocultar enlace "Deploy" y "Manage app" */
+    [data-testid="manage-app-button"] {display: none;}
+    
     /* Sidebar con diseño mejorado */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%);
